@@ -8,7 +8,7 @@ Explicit learning is defined as a conscious and intentional process where learne
 
 This conscious engagement with language rules is primarily associated with the development of grammatical competence.
 
-This knowledge directly contributes to accuracy, which is the ability to use the language precisely and with minimal errors. == suggests that in the initial stages of language learning, prioritizing accuracy through explicit means is crucial for establishing a robust linguistic foundation.==
+This knowledge directly contributes to accuracy, which is the ability to use the language precisely and with minimal errors. ==Research suggests that in the initial stages of language learning, prioritizing accuracy through explicit means is crucial for establishing a robust linguistic foundation.==
 
 The deliberate nature of explicit learning, inherently consumes significant cognitive resources, particularly attention and working memory. This high cognitive investment is the fundamental reason why explicit learning feels like *deep concentration* and is challenging to sustain for extended periods.
 

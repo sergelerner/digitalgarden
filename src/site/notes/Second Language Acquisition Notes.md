@@ -2,6 +2,11 @@
 {"dg-publish":true,"permalink":"/second-language-acquisition-notes/","tags":["Language"]}
 ---
 
+
+In foreign language learning, two primary modes emerge: **Explicit Learning** and **Implicit Acquisition**. Explicit learning is a conscious, effortful process focused on understanding language mechanics and rules, crucial for *accuracy*, though demanding "deep concentration" and challenging to sustain for long periods due to cognitive load. This creates a paradox: it's essential for accuracy but limited in sustainability.  
+
+Conversely, **Implicit Acquisition** is a subconscious process of "picking up" a language naturally, akin to first language acquisition, and is vital for developing *fluency*. This mode is less cognitively draining, allowing for more sustained engagement.
+
 # Explicit Learning 
 
 Explicit learning is defined as a conscious and intentional process where learners actively strive to identify patterns, formulate rules, and test hypotheses about the target language.
@@ -16,7 +21,7 @@ When learners are presented with more information or tasks than their cognitive 
 
 This presents a paradox: its ==essential nature for accuracy comes with an inherent limitation in sustainability==, underscoring the need for complementary approaches.
 
-# Implicit 
+# Implicit Acquisition
 
 Stephen Krashen famously distinguished between "acquisition" and "learning," a dichotomy that provides foundational terminology for the two observed modes. According to Krashen, acquisition is a subconscious process of incidentally "picking up" a language, akin to how children become proficient in their L1.
 

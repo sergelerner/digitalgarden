@@ -16,14 +16,11 @@ Artificiality
 Social pretension
 Class consciousness 
 
+### Here's how Holden acts as his own **antagonist**
 
-### Here's how Holden acts as his own antagonist
-#### Self-Imposed Alienation
-Despite his deep desire for connection and understanding Holden consistently pushes others away. He judges almost everyone he encounters, quickly dismissing them as "phonies" or "morons." This judgmental cynicism, while a defense mechanism, isolates him and prevents him from forming the genuine relationships he craves. He seeks belonging but actively provokes aversion in others.
+**Self-Imposed Alienation:** Despite his deep desire for connection and understanding Holden consistently pushes others away. He judges almost everyone he encounters, quickly dismissing them as "phonies" or "morons." This judgmental cynicism, while a defense mechanism, isolates him and prevents him from forming the genuine relationships he craves. He seeks belonging but actively provokes aversion in others.
 
-
-
-
+**Hypocrisy and Inconsistency:** One of Holden's defining traits, and a clear sign of his internal conflict, is his own phoniness. He despises liars, yet he admits to being "the most terrific liar you ever saw in your life." He criticizes others for being superficial, yet he often judges people based on external appearances or perceived social status.
 
 ## In another piece
 

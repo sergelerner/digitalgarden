@@ -16,7 +16,7 @@ Artificiality
 Social pretension
 Class consciousness 
 
-### Here's how Holden acts as his own **antagonist**
+### Holden, is his own **antagonist**
 
 **Self-Imposed Alienation:** Despite his deep desire for connection and understanding Holden consistently pushes others away. He judges almost everyone he encounters, quickly dismissing them as "phonies" or "morons." This judgmental cynicism, while a defense mechanism, isolates him and prevents him from forming the genuine relationships he craves. He seeks belonging but actively provokes aversion in others.
 

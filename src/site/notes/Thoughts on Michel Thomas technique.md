@@ -4,7 +4,7 @@
 
 This following is with regards to [[Second Language Acquisition Notes\|Second Language Acquisition Notes]].
 
-While the Michel Thomas method _feels_ intuitive and stress-free, it is a form of **explicit instruction designed to feel implicit**—prioritizing clarity, structure, and guided practice to build a strong speaking foundation quickly.
+While the Michel Thomas method _feels_ intuitive and stress-free, it is a form of ==explicit instruction designed to feel implicit==—prioritizing clarity, structure, and guided practice to build a strong speaking foundation quickly.
 
 #### **Key Characteristics of Explicit Learning in the Method:**
 

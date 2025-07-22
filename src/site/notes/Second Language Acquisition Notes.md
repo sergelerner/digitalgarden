@@ -26,12 +26,7 @@ This presents a paradox: its ==essential nature for accuracy comes with an inher
 Stephen Krashen famously distinguished between "acquisition" and "learning," a dichotomy that provides foundational terminology for the two observed modes. According to Krashen, acquisition is a subconscious process of incidentally "picking up" a language, akin to how children become proficient in their L1.
 
 Let’s look into SLA building blocks and cycle.
-
-![[The Relation of Input, Interaction, and Output in SLA .pdf]]
-
 https://www.atlantis-press.com/article/125973657.pdf
-
-
 
 ## Input Hypothesis 
 

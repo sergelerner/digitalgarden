@@ -1,0 +1,14 @@
+{
+    "name": "halfgoat-notes",
+    "compatibility_date": "2026-07-06",
+    "assets": {
+        "directory": "./dist",
+        "not_found_handling": "404-page"
+    },
+    "routes": [
+        {
+            "pattern": "notes.halfgoat.dev",
+            "custom_domain": true
+        }
+    ]
+}

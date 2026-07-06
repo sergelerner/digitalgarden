@@ -1,5 +1,5 @@
 ---
-{"dg-publish":true,"permalink":"/task-boundaries-are-operational-not-conceptual/","tags":["code"]}
+{"dg-publish":true,"permalink":"/task-boundaries-are-operational-not-conceptual/","tags":["code","gardenEntry"]}
 ---
 
 A design doc describes a pipeline as logical steps: fetch, dedup, decide, compute paths, dispatch. A common mistake is translating that diagram 1:1 into orchestrator tasks — one Airflow task per box.

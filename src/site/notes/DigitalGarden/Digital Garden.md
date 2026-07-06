@@ -1,5 +1,5 @@
 ---
-{"dg-publish":true,"permalink":"/digital-garden/digital-garden/","tags":["gardenEntry"]}
+{"dg-publish":true,"permalink":"/digital-garden/digital-garden/"}
 ---
 
 Trying to make sense in books I read.
@@ -11,4 +11,4 @@ Trying to make sense of second language learning as an adult.
 
 
 Notes on Software
-[[Notes on Software\|Notes on Software]]
+[[DigitalGarden/Notes on Software\|Notes on Software]]

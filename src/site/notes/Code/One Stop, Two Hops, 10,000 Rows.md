@@ -1,5 +1,5 @@
 ---
-{"dg-publish":true,"permalink":"/code/one-stop-two-hops-10-000-rows/"}
+{"dg-publish":true,"permalink":"/code/one-stop-two-hops-10-000-rows/","dg-note-properties":{}}
 ---
 
 *From partitions to parquet files — a tour of the decisions that actually determine your job's speed and your data's shape.*
@@ -41,7 +41,7 @@ service_day     string
 ```
 
 
-![[spark-enrichment-map.html]]
+<iframe src="/img/user/Code/spark-enrichment-map.html" width="100%" height="800px" title="spark-enrichment-map.html" style="border:1px solid #ccc;" loading="lazy"></iframe>
 
 The output is parquet: every original stop column, plus one row per `trip_id` found. The fan-out is severe and entirely realistic — a stop served by 5 routes, each running ~2,000 trips across the schedule period, expands into **10,000 output rows**. The output dwarfs the input.
 

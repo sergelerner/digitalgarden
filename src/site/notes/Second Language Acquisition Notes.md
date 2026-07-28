@@ -1,5 +1,5 @@
 ---
-{"dg-publish":true,"permalink":"/second-language-acquisition-notes/","tags":["Language"]}
+{"dg-publish":true,"permalink":"/second-language-acquisition-notes/","tags":["Language"],"dg-note-properties":{"tags":["Language"]}}
 ---
 
 

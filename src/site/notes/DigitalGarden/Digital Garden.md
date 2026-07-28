@@ -1,5 +1,5 @@
 ---
-{"dg-publish":true,"permalink":"/digital-garden/digital-garden/"}
+{"dg-publish":true,"permalink":"/digital-garden/digital-garden/","dg-note-properties":{}}
 ---
 
 Trying to make sense in books I read.

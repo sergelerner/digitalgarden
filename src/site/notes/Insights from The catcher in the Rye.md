@@ -1,5 +1,5 @@
 ---
-{"dg-publish":true,"permalink":"/insights-from-the-catcher-in-the-rye/","tags":["Label/Hamid-Ebadi"]}
+{"dg-publish":true,"permalink":"/insights-from-the-catcher-in-the-rye/","tags":["Label/Hamid-Ebadi"],"dg-note-properties":{"tags":["Label/Hamid-Ebadi"]}}
 ---
 
 Holden's aversion to "phonies" is a central theme in _The Catcher in the Rye_. For Holden, phoniness represents insincerity, artificiality, and a lack of genuine connection.

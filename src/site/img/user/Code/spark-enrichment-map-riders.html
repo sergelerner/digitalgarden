@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The job we'll follow — stops, routes, riders</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;   /* route 47 */
+    --series-2:       #eb6834;   /* route 12 */
+    --series-3:       #1baf7a;   /* route 63 */
+    --zone-fill:      rgba(11,11,11,0.026);
+    --stop-fill:      #fcfcfb;
+    --chip-bg:        rgba(11,11,11,0.045);
+    --hero:           #0b0b0b;
+    --dim:            0.16;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --zone-fill:      rgba(255,255,255,0.035);
+      --stop-fill:      #1a1a19;
+      --chip-bg:        rgba(255,255,255,0.07);
+      --hero:           #ffffff;
+      --dim:            0.22;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --zone-fill:      rgba(255,255,255,0.035);
+    --stop-fill:      #1a1a19;
+    --chip-bg:        rgba(255,255,255,0.07);
+    --hero:           #ffffff;
+    --dim:            0.22;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 48px; }
+
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
+  h1 { font-size: 21px; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); margin: 0; max-width: 68ch; }
+  .sub code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--chip-bg); padding: 1px 5px; border-radius: 4px; }
+  #themeToggle {
+    flex: none; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+    border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  #themeToggle:hover { color: var(--text-primary); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 14px 0 16px; }
+  .legend .lg { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+  .lg .swatch { width: 18px; height: 0; border-top: 3px solid; border-radius: 2px; }
+  .lg .stopdot { width: 11px; height: 11px; border-radius: 50%; background: var(--stop-fill); border: 2.5px solid var(--text-secondary); }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px;
+  }
+  .card h2 { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 10px; }
+
+  /* ---------- map ---------- */
+  #map { width: 100%; height: auto; display: block; }
+  .zone { fill: var(--zone-fill); stroke: var(--gridline); stroke-dasharray: 5 5; stroke-width: 1; }
+  .zone-label { fill: var(--text-muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .route { fill: none; stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; transition: opacity .25s; }
+  .route-loop { fill: none; }
+  .route-tag rect { rx: 4; }
+  .route-tag text { font-size: 11px; font-weight: 700; fill: #fff; }
+  .stop-hit { fill: transparent; cursor: pointer; }
+  .stop-dot { fill: var(--stop-fill); stroke: var(--text-secondary); stroke-width: 2.5; pointer-events: none; transition: opacity .25s; }
+  .stop-label { fill: var(--text-secondary); font-size: 12px; font-weight: 550; pointer-events: none; }
+  .stop-sub { fill: var(--text-muted); font-size: 10.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; }
+  .stop.selected .stop-dot { stroke: var(--text-primary); stroke-width: 3; }
+  .stop.selected .stop-label { fill: var(--text-primary); }
+  .sel-ring { fill: none; stroke: var(--text-primary); stroke-width: 1.25; stroke-dasharray: 3 3; opacity: 0; pointer-events: none; }
+  .stop.selected .sel-ring { opacity: 0.8; }
+  .dimmed { opacity: var(--dim); }
+  .stop-hit:focus-visible + .stop-dot { stroke: var(--text-primary); stroke-width: 3.5; }
+  .maphint { color: var(--text-muted); font-size: 12.5px; margin: 10px 2px 0; }
+
+  /* ---------- tooltip ---------- */
+  #tooltip {
+    position: fixed; z-index: 30; pointer-events: none; display: none;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14); padding: 8px 11px; font-size: 12.5px; max-width: 240px;
+  }
+  #tooltip .tt-title { font-weight: 650; color: var(--text-primary); margin-bottom: 2px; }
+  #tooltip .tt-row { color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+
+  /* ---------- pipeline panel ---------- */
+  .step { border-top: 1px solid var(--gridline); padding: 12px 0; }
+  .step:first-of-type { border-top: none; padding-top: 2px; }
+  .step h3 { font-size: 12px; margin: 0 0 8px; color: var(--text-muted); font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+  .step h3 .ds { color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; font-size: 12.5px; }
+  .kv dt { color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; padding-top: 1px;}
+  .kv dd { margin: 0; color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+  .normalize { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; font-size: 12px; color: var(--text-secondary); }
+  .normalize .arrow { color: var(--text-muted); }
+  .keychip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    background: var(--chip-bg); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; color: var(--text-primary);
+  }
+  .keychip b { font-weight: 400; color: var(--text-muted); }
+
+  .hoprow { display: flex; align-items: center; gap: 9px; padding: 4px 0; font-size: 12.5px; }
+  .hoprow .rkey { width: 16px; border-top: 3px solid; border-radius: 2px; flex: none; }
+  .hoprow .rid { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-primary); }
+  .hoprow .dir { color: var(--text-muted); font-size: 12px; }
+
+  .triproute { margin: 8px 0 2px; }
+  .triproute .tr-head { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; margin-bottom: 5px; }
+  .triproute .tr-head .rkey { width: 16px; border-top: 3px solid; border-radius: 2px; flex: none; align-self: center; }
+  .triproute .tr-head .count { color: var(--text-muted); font-size: 12px; }
+  .trips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tripchip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px;
+    background: var(--chip-bg); border-radius: 4px; padding: 2px 6px; color: var(--text-secondary);
+  }
+  .tripmore { font-size: 11px; color: var(--text-muted); align-self: center; }
+
+  .fanout { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 4px 0 10px; }
+  .fan-node { text-align: center; }
+  .fan-node .n { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; color: var(--hero); }
+  .fan-node .l { font-size: 11px; color: var(--text-muted); }
+  .fan-arrow { color: var(--text-muted); font-size: 15px; padding-bottom: 14px; }
+  .scale-note { font-size: 12px; color: var(--text-secondary); border-left: 3px solid var(--gridline); padding: 2px 0 2px 10px; margin-top: 6px; }
+  .scale-note b { font-weight: 650; }
+
+  .nomatch {
+    font-size: 12.5px; color: var(--text-secondary); background: var(--chip-bg);
+    border: 1px dashed var(--baseline); border-radius: 8px; padding: 9px 11px;
+  }
+  .nomatch b { color: var(--text-primary); font-weight: 650; }
+
+  /* ---------- output table ---------- */
+  .tablecard { margin-top: 16px; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th {
+    text-align: left; color: var(--text-muted); font-weight: 550; font-size: 11.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border-bottom: 1px solid var(--baseline); padding: 5px 14px 5px 0; white-space: nowrap;
+  }
+  td {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary); border-bottom: 1px solid var(--gridline);
+    padding: 4px 14px 4px 0; white-space: nowrap;
+  }
+  td.tripcell { color: var(--text-primary); }
+  td .null { color: var(--text-muted); font-style: italic; }
+  .tfoot { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>The job we'll follow — one stop, two hops, 10,000 rows</h1>
+      <p class="sub">A partner's catalog of bus stops slated for rebuilding, enriched with every regular rider each stop serves.
+      Hop&nbsp;1: <code>partner_stops → route_stops</code> finds the routes serving a stop.
+      Hop&nbsp;2: <code>route_stops → rider_routes</code> fans each route out into its regular riders.
+      Click a stop to watch both hops run.</p>
+    </div>
+    <button id="themeToggle" type="button">Dark mode</button>
+  </header>
+
+  <div class="legend" id="legend">
+    <span class="lg"><span class="stopdot"></span> partner stop (the data being enriched)</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Sample of the network</h2>
+      <svg id="map" viewBox="0 0 760 520" role="img" aria-label="Stylized transit map with fare zones, bus routes and partner stops"></svg>
+      <p class="maphint">Fare zones are the partner's 4-digit <span class="mono">zone_code</span>; each stop shows its raw
+      <span class="mono">zone/stop</span> integers. Depot Lane sits on no route — it's the left join's null case.</p>
+    </div>
+
+    <div class="card" id="pipeline">
+      <h2 id="pipelineTitle">Two-hop enrichment</h2>
+      <div id="steps"></div>
+    </div>
+  </div>
+
+  <div class="card tablecard">
+    <h2 id="outputTitle">Output — one row per (stop, rider)</h2>
+    <div class="tablewrap">
+      <table id="outputTable">
+        <thead>
+          <tr><th>stop_ref</th><th>zone_code</th><th>stop_code</th><th>closure_start</th><th>rider_id</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="tfoot" id="tableFoot"></p>
+  </div>
+</div>
+
+<div id="tooltip" role="status"></div>
+
+<script>
+"use strict";
+
+/* ---------------- sample data (made up, schema-faithful) ---------------- */
+
+const ROUTES = {
+  "47": { label: "47", name: "Downtown → Airport", cssVar: "--series-1" },
+  "12": { label: "12", name: "Crosstown",          cssVar: "--series-2" },
+  "63": { label: "63", name: "Harbor Loop",        cssVar: "--series-3" }
+};
+
+/* partner_stops — the file being enriched (raw, unpadded integers) */
+const PARTNER_STOPS = [
+  { stop_ref: "PS-0104", zone_code: 42,  stop_code: 1337, closure_start: "2026-09-01", name: "Elm Street",       x: 170, y: 320 },
+  { stop_ref: "PS-0093", zone_code: 42,  stop_code: 2001, closure_start: "2026-09-08", name: "Central Station",  x: 280, y: 210 },
+  { stop_ref: "PS-0121", zone_code: 42,  stop_code: 1504, closure_start: "2026-09-15", name: "Harbor Gate",      x: 120, y: 430 },
+  { stop_ref: "PS-0140", zone_code: 43,  stop_code: 402,  closure_start: "2026-09-15", name: "Mill Road",        x: 400, y: 210 },
+  { stop_ref: "PS-0088", zone_code: 117, stop_code: 88,   closure_start: "2026-10-01", name: "Airport Terminal", x: 640, y: 130 },
+  { stop_ref: "PS-0152", zone_code: 43,  stop_code: 999,  closure_start: "2026-10-01", name: "Depot Lane",       x: 470, y: 430 }
+];
+
+/* route_stops — hop 1 reference (keys stored ZERO-PADDED, hence the lpad) */
+const ROUTE_STOPS = [
+  { route_id: "47", zone: "0042", stop: "01337", direction: "eastbound" },
+  { route_id: "12", zone: "0042", stop: "01337", direction: "southbound" },
+  { route_id: "63", zone: "0042", stop: "01337", direction: "loop" },
+  { route_id: "47", zone: "0042", stop: "02001", direction: "eastbound" },
+  { route_id: "12", zone: "0042", stop: "02001", direction: "southbound" },
+  { route_id: "63", zone: "0042", stop: "01504", direction: "loop" },
+  { route_id: "12", zone: "0043", stop: "00402", direction: "southbound" },
+  { route_id: "47", zone: "0117", stop: "00088", direction: "eastbound" }
+];
+
+/* rider_routes — hop 2, the app's regulars-per-route feed (a small sample of a huge one) */
+const FULL_RIDER_COUNTS = { "47": 2140, "12": 1880, "63": 960 };
+const RIDER_SAMPLES = {
+  "47": [["R-88412","monthly"],["R-20481","monthly"],["R-31776","payg"],["R-04913","monthly"],["R-56037","student"],["R-77250","payg"]],
+  "12": [["R-11803","monthly"],["R-42267","payg"],["R-63590","monthly"],["R-09144","student"],["R-71428","monthly"],["R-35061","payg"]],
+  "63": [["R-27615","payg"],["R-50992","monthly"],["R-83247","student"],["R-14730","monthly"],["R-66381","payg"]]
+};
+const RIDER_ROUTES = [];
+for (const [rid, list] of Object.entries(RIDER_SAMPLES)) {
+  for (const [account, card] of list) {
+    RIDER_ROUTES.push({ route_id: rid, rider_id: account, card_type: card });
+  }
+}
+
+/* map geometry for the routes */
+const ROUTE_PATHS = {
+  "47": "M 36 320 H 170 L 280 210 H 480 L 560 130 H 716",
+  "12": "M 400 66 V 210 H 280 L 170 320 V 486",
+  "63": "M 170 320 L 92 362 L 120 430 L 232 452 L 312 402 L 282 340 Z"
+};
+const ROUTE_TAGS = { /* where the little route-number bullets sit */
+  "47": [[36, 320], [716, 130]],
+  "12": [[400, 66], [170, 486]],
+  "63": [[232, 452]]
+};
+const ZONES = [
+  { code: "0042", name: "Downtown", x: 24,  y: 96,  w: 312, h: 400 },
+  { code: "0043", name: "Midtown",  x: 344, y: 96,  w: 188, h: 400, labelBottom: true },
+  { code: "0117", name: "Airport",  x: 540, y: 96,  w: 196, h: 130 }
+];
+
+/* ---------------- helpers ---------------- */
+
+const lpad = (v, n) => String(v).padStart(n, "0");
+const svgNS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}) => {
+  const node = document.createElementNS(svgNS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+};
+const div = (cls, parent) => {
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  if (parent) parent.appendChild(d);
+  return d;
+};
+const routeColor = rid => `var(${ROUTES[rid].cssVar})`;
+
+function routesForStop(stop) {
+  const zk = lpad(stop.zone_code, 4), sk = lpad(stop.stop_code, 5);
+  return ROUTE_STOPS.filter(r => r.zone === zk && r.stop === sk);
+}
+function ridersForRoute(rid) {
+  return RIDER_ROUTES.filter(r => r.route_id === rid);
+}
+
+/* ---------------- legend ---------------- */
+
+const legend = document.getElementById("legend");
+const stopLegendItem = legend.firstElementChild;
+for (const [rid, r] of Object.entries(ROUTES)) {
+  const item = document.createElement("span");
+  item.className = "lg";
+  const sw = document.createElement("span");
+  sw.className = "swatch";
+  sw.style.borderTopColor = routeColor(rid);
+  item.appendChild(sw);
+  item.appendChild(document.createTextNode(`Route ${r.label} · ${r.name}`));
+  legend.insertBefore(item, stopLegendItem);
+}
+
+/* ---------------- map ---------------- */
+
+const map = document.getElementById("map");
+const gZones = el("g"), gRoutes = el("g"), gTags = el("g"), gStops = el("g");
+map.append(gZones, gRoutes, gTags, gStops);
+
+for (const z of ZONES) {
+  gZones.appendChild(el("rect", { class: "zone", x: z.x, y: z.y, width: z.w, height: z.h, rx: 14 }));
+  const t = el("text", { class: "zone-label", x: z.x + 12, y: z.labelBottom ? z.y + z.h + 16 : z.y - 8 });
+  t.textContent = `fare zone ${z.code} · ${z.name}`;
+  gZones.appendChild(t);
+}
+
+const routeEls = {};
+for (const [rid, d] of Object.entries(ROUTE_PATHS)) {
+  const p = el("path", { class: "route", d, stroke: routeColor(rid) });
+  gRoutes.appendChild(p);
+  routeEls[rid] = [p];
+}
+for (const [rid, tags] of Object.entries(ROUTE_TAGS)) {
+  for (const [x, y] of tags) {
+    const g = el("g", { class: "route-tag" });
+    const r = el("rect", { x: x - 11, y: y - 9, width: 22, height: 18, fill: routeColor(rid) });
+    const t = el("text", { x, y: y + 4, "text-anchor": "middle" });
+    t.textContent = ROUTES[rid].label;
+    g.append(r, t);
+    gTags.appendChild(g);
+    routeEls[rid].push(g);
+  }
+}
+
+const tooltip = document.getElementById("tooltip");
+function showTooltip(evt, stop) {
+  tooltip.replaceChildren();
+  const title = div("tt-title", tooltip);
+  title.textContent = stop.name;
+  const served = routesForStop(stop);
+  const rows = [
+    `zone_code ${stop.zone_code} → "${lpad(stop.zone_code, 4)}"`,
+    `stop_code ${stop.stop_code} → "${lpad(stop.stop_code, 5)}"`,
+    `closes: ${stop.closure_start}`,
+    served.length ? `routes: ${served.map(r => r.route_id).join(", ")}` : "routes: none (null case)"
+  ];
+  for (const r of rows) { const d = div("tt-row", tooltip); d.textContent = r; }
+  tooltip.style.display = "block";
+  positionTooltip(evt);
+}
+function positionTooltip(evt) {
+  const pad = 14, tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + tw > window.innerWidth - 8) x = evt.clientX - tw - pad;
+  if (y + th > window.innerHeight - 8) y = evt.clientY - th - pad;
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+
+const stopEls = {};
+const LABEL_OFFSETS = {
+  "Elm Street":       [-16, -22, "end"],
+  "Central Station":  [-14, -16, "end"],
+  "Harbor Gate":      [0, 26, "middle"],
+  "Mill Road":        [14, 26, "start"],
+  "Airport Terminal": [0, -26, "middle"],
+  "Depot Lane":       [0, -24, "middle"]
+};
+for (const stop of PARTNER_STOPS) {
+  const g = el("g", { class: "stop" });
+  const interchange = routesForStop(stop).length >= 3;
+  const rDot = interchange ? 8.5 : 6.5;
+
+  const ring = el("circle", { class: "sel-ring", cx: stop.x, cy: stop.y, r: rDot + 6.5 });
+  const hit = el("circle", { class: "stop-hit", cx: stop.x, cy: stop.y, r: 16, tabindex: "0", role: "button" });
+  hit.setAttribute("aria-label", `${stop.name}, zone ${stop.zone_code}, stop ${stop.stop_code}`);
+  const dot = el("circle", { class: "stop-dot", cx: stop.x, cy: stop.y, r: rDot });
+
+  const [dx, dy, anchor] = LABEL_OFFSETS[stop.name] || [12, -10, "start"];
+  const label = el("text", { class: "stop-label", x: stop.x + dx, y: stop.y + dy, "text-anchor": anchor });
+  label.textContent = stop.name;
+  const sub = el("text", { class: "stop-sub", x: stop.x + dx, y: stop.y + dy + 13, "text-anchor": anchor });
+  sub.textContent = `${stop.zone_code}/${stop.stop_code}`;
+
+  g.append(ring, hit, dot, label, sub);
+  gStops.appendChild(g);
+  stopEls[stop.stop_ref] = g;
+
+  hit.addEventListener("click", () => selectStop(stop));
+  hit.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectStop(stop); } });
+  hit.addEventListener("pointermove", e => showTooltip(e, stop));
+  hit.addEventListener("pointerleave", hideTooltip);
+  hit.addEventListener("focus", () => {
+    const box = hit.getBoundingClientRect();
+    showTooltip({ clientX: box.right, clientY: box.top }, stop);
+  });
+  hit.addEventListener("blur", hideTooltip);
+}
+
+/* ---------------- pipeline panel ---------------- */
+
+const steps = document.getElementById("steps");
+const pipelineTitle = document.getElementById("pipelineTitle");
+
+function chip(text, parent) {
+  const s = document.createElement("span");
+  s.className = "keychip";
+  s.textContent = text;
+  parent.appendChild(s);
+  return s;
+}
+
+function renderPipeline(stop) {
+  steps.replaceChildren();
+  pipelineTitle.textContent = `Two-hop enrichment · ${stop.name}`;
+
+  /* step 1 — the partner row + normalization */
+  const s1 = div("step", steps);
+  const h1 = document.createElement("h3");
+  h1.innerHTML = '<span class="ds">partner_stops</span> row — normalize once, at the boundary';
+  s1.appendChild(h1);
+
+  const kv = document.createElement("dl");
+  kv.className = "kv";
+  const pairs = [
+    ["stop_ref", stop.stop_ref], ["zone_code", String(stop.zone_code)],
+    ["stop_code", String(stop.stop_code)],
+    ["closure_start", stop.closure_start]
+  ];
+  for (const [k, v] of pairs) {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    kv.append(dt, dd);
+  }
+  s1.appendChild(kv);
+
+  const norm = div("normalize", s1);
+  const raw = document.createElement("span");
+  raw.className = "keychip";
+  raw.textContent = `${stop.zone_code} · ${stop.stop_code}`;
+  norm.appendChild(raw);
+  const arrow = document.createElement("span");
+  arrow.className = "arrow";
+  arrow.textContent = "→ lpad →";
+  norm.appendChild(arrow);
+  chip(`zone_key "${lpad(stop.zone_code, 4)}"`, norm);
+  chip(`stop_key "${lpad(stop.stop_code, 5)}"`, norm);
+
+  /* step 2 — hop 1 */
+  const served = routesForStop(stop);
+  const s2 = div("step", steps);
+  const h2 = document.createElement("h3");
+  h2.innerHTML = 'Hop 1 · join <span class="ds">route_stops</span> on (zone_key, stop_key)';
+  s2.appendChild(h2);
+
+  if (served.length === 0) {
+    const nm = div("nomatch", s2);
+    nm.innerHTML = "<b>No matching rows.</b> The left join keeps the stop and fills <b>null</b> — one output row, no riders. No exception, no warning: exactly how silent data loss would look if the keys didn't line up.";
+  } else {
+    for (const rs of served) {
+      const row = div("hoprow", s2);
+      const key = div("rkey", row);
+      key.style.borderTopColor = routeColor(rs.route_id);
+      const rid = document.createElement("span");
+      rid.className = "rid";
+      rid.textContent = `route_id "${rs.route_id}"`;
+      row.appendChild(rid);
+      const dir = document.createElement("span");
+      dir.className = "dir";
+      dir.textContent = `${ROUTES[rs.route_id].name} · ${rs.direction}`;
+      row.appendChild(dir);
+    }
+  }
+
+  /* step 3 — hop 2, the fan-out */
+  const s3 = div("step", steps);
+  const h3 = document.createElement("h3");
+  h3.innerHTML = 'Hop 2 · join <span class="ds">rider_routes</span> on route_id — the fan-out';
+  s3.appendChild(h3);
+
+  let sampleRiders = 0, fullRiders = 0;
+  if (served.length === 0) {
+    const p = div("scale-note", s3);
+    p.textContent = "Nothing to fan out — hop 1 returned no routes.";
+  } else {
+    for (const rs of served) {
+      const riders = ridersForRoute(rs.route_id);
+      sampleRiders += riders.length;
+      fullRiders += FULL_RIDER_COUNTS[rs.route_id];
+      const tr = div("triproute", s3);
+      const head = div("tr-head", tr);
+      const key = div("rkey", head);
+      key.style.borderTopColor = routeColor(rs.route_id);
+      const name = document.createElement("span");
+      name.className = "rid";
+      name.textContent = `route ${rs.route_id}`;
+      head.appendChild(name);
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = `${riders.length} sample riders of ~${FULL_RIDER_COUNTS[rs.route_id].toLocaleString("en-US")} regulars`;
+      head.appendChild(count);
+      const list = div("trips", tr);
+      for (const r of riders) {
+        const c = document.createElement("span");
+        c.className = "tripchip";
+        c.textContent = r.rider_id;
+        list.appendChild(c);
+      }
+      const more = document.createElement("span");
+      more.className = "tripmore";
+      more.textContent = "…";
+      list.appendChild(more);
+    }
+  }
+
+  /* step 4 — output */
+  const s4 = div("step", steps);
+  const h4 = document.createElement("h3");
+  h4.textContent = "Output for this stop";
+  s4.appendChild(h4);
+
+  const outRows = served.length === 0 ? 1 : sampleRiders;
+  const fan = div("fanout", s4);
+  const nodes = [
+    ["1", "stop"], ["→"], [String(served.length), "routes"],
+    ["→"], [String(served.length ? sampleRiders : 0), "sample riders"],
+    ["→"], [String(outRows), outRows === 1 ? "output row" : "output rows"]
+  ];
+  for (const n of nodes) {
+    if (n.length === 1) {
+      const a = document.createElement("span");
+      a.className = "fan-arrow"; a.textContent = n[0];
+      fan.appendChild(a);
+    } else {
+      const node = div("fan-node", fan);
+      const num = div("n", node); num.textContent = n[0];
+      const lab = div("l", node); lab.textContent = n[1];
+    }
+  }
+
+  const note = div("scale-note", s4);
+  if (served.length === 0) {
+    note.innerHTML = "In the real output this row survives with <b>rider_id = null</b> — the enrichment carries every original stop through, matched or not.";
+  } else {
+    note.innerHTML = `At production scale this one stop expands to <b>~${fullRiders.toLocaleString("en-US")} rows</b> ` +
+      `(${served.map(r => "~" + FULL_RIDER_COUNTS[r.route_id].toLocaleString("en-US")).join(" + ")}) — each one a person to notify. ` +
+      "The output dwarfs the input.";
+  }
+}
+
+/* ---------------- output table ---------------- */
+
+function renderTable(stop) {
+  const tbody = document.querySelector("#outputTable tbody");
+  const foot = document.getElementById("tableFoot");
+  document.getElementById("outputTitle").textContent = `Output — one row per (stop, rider) · ${stop.name}`;
+  tbody.replaceChildren();
+
+  const served = routesForStop(stop);
+  const riders = served.flatMap(rs => ridersForRoute(rs.route_id));
+  const rows = riders.length ? riders.map(r => r.rider_id) : [null];
+  const MAX = 8;
+
+  for (const riderId of rows.slice(0, MAX)) {
+    const tr = document.createElement("tr");
+    const cells = [stop.stop_ref, String(stop.zone_code), String(stop.stop_code), stop.closure_start];
+    for (const c of cells) {
+      const td = document.createElement("td");
+      td.textContent = c;
+      tr.appendChild(td);
+    }
+    const td = document.createElement("td");
+    td.className = "tripcell";
+    if (riderId === null) {
+      const n = document.createElement("span");
+      n.className = "null"; n.textContent = "null";
+      td.appendChild(n);
+    } else {
+      td.textContent = riderId;
+    }
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+
+  const hidden = rows.length - Math.min(rows.length, MAX);
+  foot.textContent =
+    (hidden > 0 ? `… ${hidden} more sample rows. ` : "") +
+    "Every original partner_stops column is carried through; internal bookkeeping columns (stop_row_id, zone_key, stop_key) are stripped before the write.";
+}
+
+/* ---------------- selection ---------------- */
+
+let selectedRef = null;
+function selectStop(stop) {
+  selectedRef = stop.stop_ref;
+  const served = new Set(routesForStop(stop).map(r => r.route_id));
+
+  for (const [rid, els] of Object.entries(routeEls)) {
+    for (const e of els) e.classList.toggle("dimmed", !served.has(rid));
+  }
+  for (const s of PARTNER_STOPS) {
+    const g = stopEls[s.stop_ref];
+    g.classList.toggle("selected", s.stop_ref === selectedRef);
+    const sServed = routesForStop(s).map(r => r.route_id);
+    const related = s.stop_ref === selectedRef || sServed.some(r => served.has(r));
+    g.classList.toggle("dimmed", !related);
+  }
+
+  renderPipeline(stop);
+  renderTable(stop);
+}
+
+/* ---------------- theme toggle ---------------- */
+
+const toggle = document.getElementById("themeToggle");
+function currentDark() {
+  const forced = document.documentElement.dataset.theme;
+  if (forced) return forced === "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+function syncToggleLabel() { toggle.textContent = currentDark() ? "Light mode" : "Dark mode"; }
+toggle.addEventListener("click", () => {
+  document.documentElement.dataset.theme = currentDark() ? "light" : "dark";
+  syncToggleLabel();
+});
+syncToggleLabel();
+
+/* start on the storyline's hero stop */
+selectStop(PARTNER_STOPS[0]);
+</script>
+</body>
+</html>

@@ -16,7 +16,7 @@ So for the stop on Elm Street, the question we're answering is: _who actually us
 
 Why bother? Because the stop is closing for rebuilding, and "route 47's riders" is not a notification list — people are. The enrichment turns *a stop is closing* into *these specific accounts need to know, and from this date*. Every output row is one reachable person: rider `R-88412` regularly rides route 47, route 47 calls at Elm Street, Elm Street closes on the date the row carries. Row 400 matters exactly as much as row 1 — it's a different human being.
 
-Three inputs, all landing in object storage as roughly 1 GB files. Their **format** is whatever the upstream systems happen to produce — parquet from one, CSV from another, sometimes gzip-compressed, sometimes not. Nobody on our team chooses it. As §1 and §2 show, that choice has more influence on this job than any config we set.
+Three inputs, all landing in object storage as roughly 1 GB files. Their **format** is whatever the upstream systems happen to produce — parquet from one, CSV from another, sometimes gzip-compressed, sometimes not. Nobody on our team chooses it. As sections 1 and 2 show, that choice has more influence on this job than any config we set.
 
 **`partner_stops`** — the partner's data, the thing being enriched
 ```
@@ -44,7 +44,7 @@ card_type       string
 
 <iframe src="/img/user/Code/spark-enrichment-map-riders.html" width="100%" height="800px" title="spark-enrichment-map-riders.html" style="border:1px solid #ccc;" loading="lazy"></iframe>
 
-The output is parquet: every original stop column, plus one row per `rider_id` found. The fan-out is severe and entirely realistic — a stop served by 5 routes, each with ~2,000 registered regulars, expands into **10,000 output rows**, each one a person to notify. (A rider who regularly rides two of those routes is still one person — the `collect_set` in §6 dedups them.) The output dwarfs the input.
+The output is parquet: every original stop column, plus one row per `rider_id` found. The fan-out is severe and entirely realistic — a stop served by 5 routes, each with ~2,000 registered regulars, expands into **10,000 output rows**, each one a person to notify. (A rider who regularly rides two of those routes is still one person — the `collect_set` in section 6 dedups them.) The output dwarfs the input.
 
 The cluster: executors with **4 cores and 21 GB** each, scaling up to **200 executors** — so at full stretch, **800 tasks running at once**.
 
@@ -52,7 +52,7 @@ The cluster: executors with **4 cores and 21 GB** each, scaling up to **200 exec
 
 ---
 
-## §1 · Partitions: the unit of everything
+## 1 · Partitions: the unit of everything
 
 Spark never processes "a DataFrame" as one thing. It processes partitions, in parallel.
 
@@ -78,15 +78,15 @@ When the job reads `rider_routes`, Spark decides the *initial* partition count f
 - **As parquet or uncompressed CSV:** ~24 partitions, and that number grows as the feed grows. Healthy.
 - **As gzip CSV:** the rule collapses to **one file = one partition, regardless of size**. The stage runs **3 tasks wide** on a cluster with 800 slots, each task pinning a single core to ~1 GB of serial decompression. The other 797 slots sit idle.
 
-Same bytes, same query, same cluster — an order-of-magnitude difference in read parallelism, decided entirely by a packaging choice made upstream of us. This is one reason the code repartitions immediately after reading (see §6); it's also the first thing worth checking when a stage inexplicably runs a handful of tasks wide.
+Same bytes, same query, same cluster — an order-of-magnitude difference in read parallelism, decided entirely by a packaging choice made upstream of us. This is one reason the code repartitions immediately after reading (see section 6); it's also the first thing worth checking when a stage inexplicably runs a handful of tasks wide.
 
 The partition count at any moment determines your parallelism, your memory pressure per task, and — the punchline of this post — how many output files you write.
 
 ---
 
-## §2 · Pruning: the data you never read
+## 2 · Pruning: the data you never read
 
-§1 asked how the input gets *divided*. The prior question is how much of it gets *read* at all.
+Section 1 asked how the input gets *divided*. The prior question is how much of it gets *read* at all.
 
 ▎ **Pruning** — the general term for a query engine discarding data it can prove the query doesn't need. It isn't a heuristic or an approximation: if a column, file, or row cannot possibly affect the result, reading it is pure waste, so the optimizer eliminates it. Catalyst does this on its own. Your only job is to write the query so you don't block it.
 
@@ -100,7 +100,7 @@ How much this saves **depends on the format**. Parquet stores column-by-column, 
 
 ▎ **Predicate pushdown** — narrows *which rows* are read, by moving filters as close to the source as possible. A `filter(col("zone_key").isNotNull)` is the candidate. In parquet, the footer carries per-row-group min/max statistics and null counts, so the reader can skip entire row groups that provably can't contain a match. In CSV there's nothing to consult, so the filter still runs — just *after* parsing rather than *instead of* it.
 
-Notice the pattern: **two of the three only pay off if the format cooperates.** The same upstream packaging decision that capped your parallelism in §1 also decides whether the engine can skip work it has proven unnecessary. Format isn't a storage detail; it's a query-planning capability.
+Notice the pattern: **two of the three only pay off if the format cooperates.** The same upstream packaging decision that capped your parallelism in section 1 also decides whether the engine can skip work it has proven unnecessary. Format isn't a storage detail; it's a query-planning capability.
 
 ▎ **Doing it by hand: broadcast pre-filtering** — sometimes you know a pruning opportunity the planner can't see. Our partner catalog covers a handful of fare zones; the reference feed covers the whole country. Before joining, we can compute the zones the partner data *actually contains* and use them to discard reference rows that provably can't match:
 
@@ -123,7 +123,7 @@ Semantically this join is a no-op: an inner join against the keys we're about to
 ****
 ---
 
-## §3 · Narrow vs. wide operations
+## 3 · Narrow vs. wide operations
 
 Operations divide into two families, and the difference is whether data has to move between machines.
 
@@ -135,7 +135,7 @@ A useful instinct: narrow ops are free-flowing; wide ops are checkpoints where t
 
 ---
 
-## §4 · The shuffle
+## 4 · The shuffle
 
 Every wide operation is really three sub-phases — a lineage Spark inherited directly from Hadoop MapReduce. (The term *shuffle* is not a Spark invention; it's the name MapReduce already gave the middle phase.)
 
@@ -162,7 +162,7 @@ The number is a cluster-shape decision: with 800 parallel slots (200 × 4), 2000
 
 ---
 
-## §5 · AQE: making the static number adaptive
+## 5 · AQE: making the static number adaptive
 
 A fixed 2000 is right for a national feed's big joins and absurd for a single-city test: shuffling five thousand rows into 2000 buckets means 2000 tasks holding ~2 rows each — pure scheduling overhead. Even within one production run, different shuffles carry wildly different volumes.
 
@@ -179,7 +179,7 @@ Read the settings as one sentence: *"start every shuffle at up to 2000 buckets, 
 
 ---
 
-## §6 · Where adaptivity stops: `repartition`
+## 6 · Where adaptivity stops: `repartition`
 
 ▎ **repartition** — an explicit command to shuffle a DataFrame into a chosen shape. Because *you* specified the shape, AQE treats it as authoritative and won't coalesce it. It's the escape hatch from adaptivity — sometimes you want that, sometimes it bites you. It has two overloads, and our job uses both:
 
@@ -210,7 +210,7 @@ val routeStopsPrepared = routeStops
   .repartition(shufflePartitions, col("zone_key"), col("stop_key"))
   .cache()
 
-// hand-rolled dynamic partition pruning (§2): drop reference rows whose
+// hand-rolled dynamic partition pruning (section 2): drop reference rows whose
 // zone can't appear in the partner catalog before paying to join them
 val presentZones = broadcast(stopsPrepared.select(col("zone_key")).distinct())
 
@@ -253,11 +253,11 @@ But the normalization above is doing more work than it looks like, and getting i
 >
 > First, your **metrics must use the normalized columns too**. Counting distinct keys on the raw column while joining on the padded one puts your numerator and denominator in different units, and your match rate becomes fiction — a pipeline that's correct while its own reporting lies about it.
 >
-> Second, those key columns are now **part of your DataFrame**. Strip them before writing, or they leak into your published schema forever (see §8). It's worth a test assertion — `output.columns should not contain "zone_key"` — because a leaked bookkeeping column is a schema change every downstream consumer inherits.
+> Second, those key columns are now **part of your DataFrame**. Strip them before writing, or they leak into your published schema forever (see section 8). It's worth a test assertion — `output.columns should not contain "zone_key"` — because a leaked bookkeeping column is a schema change every downstream consumer inherits.
 >
 > And regardless of which path you take: check `.explain(true)` or the SQL tab in the Spark UI for whether an `Exchange hashpartitioning` still sits above your join. Don't take co-partitioning on faith.
 
-There's a second, more reliable reason for these `repartition` calls, and it has nothing to do with the join: **normalizing the read before caching**. Whatever §1 handed us — three fat gzip partitions, or a healthy two hundred from parquet — `repartition(2000, …).cache()` converts it into a known, even, in-memory base *once*. When the input was non-splittable, this is a rescue: it's the only way those three serialized tasks stop dictating the width of everything downstream. When the input was already wide, it's still worth it, because each prepared frame is consumed more than once (`stopsPrepared` feeds the pruning broadcast, the route join, *and* the final join-back), and caching an evenly-distributed base means no reuse re-reads or re-parses the source. **Even if the join skip never fires, this alone justifies the call.**
+There's a second, more reliable reason for these `repartition` calls, and it has nothing to do with the join: **normalizing the read before caching**. Whatever section 1 handed us — three fat gzip partitions, or a healthy two hundred from parquet — `repartition(2000, …).cache()` converts it into a known, even, in-memory base *once*. When the input was non-splittable, this is a rescue: it's the only way those three serialized tasks stop dictating the width of everything downstream. When the input was already wide, it's still worth it, because each prepared frame is consumed more than once (`stopsPrepared` feeds the pruning broadcast, the route join, *and* the final join-back), and caching an evenly-distributed base means no reuse re-reads or re-parses the source. **Even if the join skip never fires, this alone justifies the call.**
 
 ▎ **Why read the number from config instead of hardcoding `2000`** — `spark.conf.get("spark.sql.shuffle.partitions")`. The static conf only governs shuffles Spark inserts *automatically*. These manual repartitions live in two places the conf can't reach on its own: right after the read (no shuffle has happened yet) and just before a cache (where AQE would otherwise coalesce). Reading the value keeps the manual calls in lockstep with the single source of truth — change the conf and they follow, instead of drifting from a magic number.
 
@@ -303,7 +303,7 @@ That's three legitimate repartitions. The fourth one was a bug.
 
 ---
 
-## §7 · The small files problem
+## 7 · The small files problem
 
 The write path did `repartition(2000)` immediately before `.write.parquet(...)`. One rule makes that fatal:
 
@@ -311,20 +311,20 @@ The write path did `repartition(2000)` immediately before `.write.parquet(...)`.
 
 So a single-city test run's few thousand rows, force-spread across 2000 partitions, became hundreds of ~1.6 KB parquet files. Why so small yet not empty?
 
-▎ **Parquet footer** — every parquet file ends with a metadata block: the schema, plus per-column statistics and byte offsets. It's the same footer that powers predicate pushdown in §2 — readers fetch it first, then pull only the byte ranges they need. But it's a fixed overhead of a few KB per file, so a file holding 3 rows is almost entirely footer.
+▎ **Parquet footer** — every parquet file ends with a metadata block: the schema, plus per-column statistics and byte offsets. It's the same footer that powers predicate pushdown in section 2 — readers fetch it first, then pull only the byte ranges they need. But it's a fixed overhead of a few KB per file, so a file holding 3 rows is almost entirely footer.
 
-▎ **Small files problem** — the classic object-storage pathology: many tiny files make every future read pay one request + one footer parse **per file**. A thousand 2 KB files can be slower to scan than a single 100 MB file. Worse, the pruning from §2 degrades too: min/max statistics are only useful when a row group contains enough rows for the range to be selective, and a file holding three rows prunes nothing. And unlike task counts — which evaporate when the job ends — **files persist and tax every reader forever**: the next scanner, the next schema probe, the next re-enrichment, the analyst's ad-hoc query.
+▎ **Small files problem** — the classic object-storage pathology: many tiny files make every future read pay one request + one footer parse **per file**. A thousand 2 KB files can be slower to scan than a single 100 MB file. Worse, the pruning from section 2 degrades too: min/max statistics are only useful when a row group contains enough rows for the range to be selective, and a file holding three rows prunes nothing. And unlike task counts — which evaporate when the job ends — **files persist and tax every reader forever**: the next scanner, the next schema probe, the next re-enrichment, the analyst's ad-hoc query.
 
 That asymmetry is the heart of the bug: `repartition(2000)` leaked a **transient cluster-tuning decision** into a **permanent storage artifact**.
 
 ---
 
-## §8 · The fix: size the write by the data
+## 8 · The fix: size the write by the data
 
 The principle: **output file count should be a function of data volume, not cluster configuration.** The job can simply look at the volume before writing.
 
 ```scala
-// The normalized keys and the row id were internal bookkeeping (§6) — they must not
+// The normalized keys and the row id were internal bookkeeping (section 6) — they must not
 // leak into the published schema, which is permanent in a way task counts are not.
 val internalColumns = Set("stop_row_id", "zone_key", "stop_key", "rider_ids")
 
@@ -342,11 +342,11 @@ logger.info(s"Wrote $explodedRows rows into $targetFiles files")
 
 Each line leans on a concept from above:
 
-- The **column filtering** pays off the debt incurred in §6. Materializing normalized keys was the right call for the join, but those columns are ours, not the consumer's — the same "transient decision, permanent artifact" trap as the file count, just applied to schema instead of layout.
+- The **column filtering** pays off the debt incurred in section 6. Materializing normalized keys was the right call for the join, but those columns are ours, not the consumer's — the same "transient decision, permanent artifact" trap as the file count, just applied to schema instead of layout.
 - The `count()` would normally mean computing everything twice (lazy evaluation — every action re-cooks). But `enriched`, the cached parent, is already in memory, so the count only replays the **narrow** `explode` over in-memory data. **Caching is what makes "peek, then decide" affordable.**
 - Why 5M rows instead of a byte target? Compressed size is only knowable *after* writing; row count is knowable *before*. For this narrow output schema (two codes, a date, one id) 5M rows lands around 100–250 MB compressed — comfortably inside the range object-storage readers like, and big enough that row-group statistics can actually prune.
 
-▎ **coalesce(n)** — reduces the partition count **without a shuffle**: existing partitions are glued together on the machines where they already live. Contrast with `repartition`, which re-mails every row across the network. The distinction from §6, in one line:
+▎ **coalesce(n)** — reduces the partition count **without a shuffle**: existing partitions are glued together on the machines where they already live. Contrast with `repartition`, which re-mails every row across the network. The distinction from section 6, in one line:
 
 | | `repartition(n)` | `repartition(n, cols)` | `coalesce(n)` |
 |---|---|---|---|
@@ -381,8 +381,8 @@ Three things are worth internalizing, and the first two are the same lesson wear
 
 **Never let a transient decision become a permanent artifact.** Task counts vanish when the job exits. Files and schemas don't — they bill every reader, forever. A partition count chosen for the cluster's benefit has no business determining how many files you write, and a bookkeeping column added for the planner's benefit has no business appearing in your published schema.
 
-**Don't block the optimizer.** Almost everything in §2 happens for free, and the way to lose it is to shuffle or cache before you've projected and filtered. The cheapest work is the work the engine proves it can skip.
+**Don't block the optimizer.** Almost everything in section 2 happens for free, and the way to lose it is to shuffle or cache before you've projected and filtered. The cheapest work is the work the engine proves it can skip.
 
 ---
 
-Two notes on this revision. I folded in the **boundary-validation callout** at the end of §6 — you hadn't explicitly asked for it, so it's easy to cut as a single block if you'd rather keep §6 focused on partitioning alone. And §7's small-files section picked up one new sentence connecting tiny files back to **degraded row-group pruning**, which strengthens the argument: small files don't just cost you requests, they cost you the very optimization §2 promised.
+Two notes on this revision. I folded in the **boundary-validation callout** at the end of section 6 — you hadn't explicitly asked for it, so it's easy to cut as a single block if you'd rather keep section 6 focused on partitioning alone. And section 7's small-files section picked up one new sentence connecting tiny files back to **degraded row-group pruning**, which strengthens the argument: small files don't just cost you requests, they cost you the very optimization section 2 promised.

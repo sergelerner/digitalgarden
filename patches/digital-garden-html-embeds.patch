@@ -1,0 +1,314 @@
+From a1bde787e79021bc41694c1c3c8722d5ae10cb29 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 28 Jul 2026 20:15:58 +0000
+Subject: [PATCH] feat: publish embedded .html files and render them as iframes
+
+Adds HTML_REGEX and TRANSCLUDED_HTML_REGEX, uploads embedded .html
+attachments to /img/user/ like PDFs, and compiles the embed into an
+iframe (same 20MB cap and wikilink fallbacks as the PDF pipeline).
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Ddsz4ThFB7qPPmYxyPujNA
+---
+ src/compiler/GardenPageCompiler.ts | 244 ++++++++++++++++++++++++++++-
+ src/utils/regexes.ts               |   4 +
+ 2 files changed, 246 insertions(+), 2 deletions(-)
+
+diff --git a/src/compiler/GardenPageCompiler.ts b/src/compiler/GardenPageCompiler.ts
+index b96e59f..3539edf 100644
+--- a/src/compiler/GardenPageCompiler.ts
++++ b/src/compiler/GardenPageCompiler.ts
+@@ -31,6 +31,8 @@ import {
+ 	TRANSCLUDED_SVG_REGEX,
+ 	PDF_REGEX,
+ 	TRANSCLUDED_PDF_REGEX,
++	HTML_REGEX,
++	TRANSCLUDED_HTML_REGEX,
+ } from "../utils/regexes";
+ import Logger from "js-logger";
+ import { DataviewCompiler } from "./DataviewCompiler";
+@@ -40,6 +42,11 @@ import { CanvasCompiler, ITextNodeProcessor } from "./CanvasCompiler";
+ const PDF_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+ const PDF_IFRAME_HEIGHT = "900px";
+ const PDF_IFRAME_STYLE = "border:1px solid #ccc;";
++
++// HTML embedding constants
++const HTML_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
++const HTML_IFRAME_HEIGHT = "800px";
++const HTML_IFRAME_STYLE = "border:1px solid #ccc;";
+ import { PublishFile } from "../publishFile/PublishFile";
+ import { replaceBlockIDs } from "./replaceBlockIDs";
+ import { getFrontmatterImageLinkpath } from "./frontmatterImageLinks";
+@@ -874,7 +881,7 @@ export class GardenPageCompiler implements ITextNodeProcessor {
+ 
+ 		//![[image.png]] or ![[file.pdf]]
+ 		const transcludedImageRegex =
+-			/!\[\[(.*?)(\.(png|jpg|jpeg|gif|webp|pdf))\\?\|(.*?)\]\]|!\[\[(.*?)(\.(png|jpg|jpeg|gif|webp|pdf))\]\]/g;
++			/!\[\[(.*?)(\.(png|jpg|jpeg|gif|webp|pdf|html))\\?\|(.*?)\]\]|!\[\[(.*?)(\.(png|jpg|jpeg|gif|webp|pdf|html))\]\]/g;
+ 		const transcludedImageMatches = text.match(transcludedImageRegex);
+ 
+ 		if (transcludedImageMatches) {
+@@ -908,7 +915,7 @@ export class GardenPageCompiler implements ITextNodeProcessor {
+ 
+ 		//![](image.png) or ![](file.pdf)
+ 		const imageRegex =
+-			/!\[(.*?)\]\((.*?)(\.(png|jpg|jpeg|gif|webp|pdf))\)/g;
++			/!\[(.*?)\]\((.*?)(\.(png|jpg|jpeg|gif|webp|pdf|html))\)/g;
+ 		const imageMatches = text.match(imageRegex);
+ 
+ 		if (imageMatches) {
+@@ -1485,6 +1492,239 @@ export class GardenPageCompiler implements ITextNodeProcessor {
+ 				}
+ 			}
+ 
++			// HTML LINKS
++			// Helper function to generate HTML iframe embed
++			const generateHtmlIframe = (src: string, title: string): string => {
++				return `<iframe src="${encodeURI(
++					src,
++				)}" width="100%" height="${HTML_IFRAME_HEIGHT}" title="${title}" style="${HTML_IFRAME_STYLE}" loading="lazy"></iframe>`;
++			};
++
++			// ![[page.html]]
++			const transcludedHtmlMatches = text.match(TRANSCLUDED_HTML_REGEX);
++
++			if (transcludedHtmlMatches) {
++				for (const htmlMatch of transcludedHtmlMatches) {
++					try {
++						const [htmlNameFromFile, ...metadataParts] = htmlMatch
++							.substring(
++								htmlMatch.indexOf("[") + 2,
++								htmlMatch.indexOf("]"),
++							)
++							.split("|");
++
++						const altText =
++							metadataParts.join("|") || htmlNameFromFile;
++						const htmlPath = getLinkpath(htmlNameFromFile);
++
++						if (htmlPath === "") {
++							imageText = imageText.replace(
++								htmlMatch,
++								buildWikilinkFallback(
++									htmlNameFromFile,
++									metadataParts,
++								),
++							);
++							continue;
++						}
++
++						const linkedFile =
++							this.metadataCache.getFirstLinkpathDest(
++								htmlPath,
++								filePath,
++							) as TFile;
++
++						if (!linkedFile || linkedFile.extension !== "html") {
++							imageText = imageText.replace(
++								htmlMatch,
++								buildWikilinkFallback(
++									htmlNameFromFile,
++									metadataParts,
++								),
++							);
++							continue;
++						}
++
++						if (linkedFile.stat.size > HTML_MAX_SIZE_BYTES) {
++							new Notice(
++								`HTML file ${linkedFile.name} is larger than 20MB and will not be published as an embed. A link will be used.`,
++							);
++
++							imageText = imageText.replace(
++								htmlMatch,
++								buildWikilinkFallback(
++									htmlNameFromFile,
++									metadataParts,
++									"HTML file too large to embed",
++								),
++							);
++							continue;
++						}
++
++						const htmlBinary =
++							await this.vault.readBinary(linkedFile);
++						const htmlBase64 = arrayBufferToBase64(htmlBinary);
++						const cmsHtmlPath = `/img/user/${linkedFile.path}`;
++
++						assets.push({
++							path: cmsHtmlPath,
++							content: htmlBase64,
++							localHash: generateBlobHashFromBase64(htmlBase64),
++						});
++
++						imageText = imageText.replace(
++							htmlMatch,
++							generateHtmlIframe(cmsHtmlPath, altText),
++						);
++					} catch (e) {
++						Logger.warn(
++							"Error processing transcluded HTML link:",
++							e,
++						);
++
++						const [htmlNameFromFile, ...metadataParts] = htmlMatch
++							.substring(
++								htmlMatch.indexOf("[") + 2,
++								htmlMatch.indexOf("]"),
++							)
++							.split("|");
++
++						imageText = imageText.replace(
++							htmlMatch,
++							buildWikilinkFallback(
++								htmlNameFromFile,
++								metadataParts,
++							),
++						);
++					}
++				}
++			}
++
++			// ![](page.html)
++			const htmlMatches = text.match(HTML_REGEX);
++
++			if (htmlMatches) {
++				for (const htmlMatch of htmlMatches) {
++					try {
++						const nameStart = htmlMatch.indexOf("[") + 1;
++						const nameEnd = htmlMatch.indexOf("]");
++
++						const htmlName = htmlMatch.substring(
++							nameStart,
++							nameEnd,
++						);
++
++						const pathStart = htmlMatch.lastIndexOf("(") + 1;
++						const pathEnd = htmlMatch.lastIndexOf(")");
++
++						const htmlLinkPath = htmlMatch.substring(
++							pathStart,
++							pathEnd,
++						);
++
++						// External HTML page - embed directly
++						if (htmlLinkPath.startsWith("http")) {
++							imageText = imageText.replace(
++								htmlMatch,
++								generateHtmlIframe(
++									htmlLinkPath,
++									htmlName || "External page",
++								),
++							);
++							continue;
++						}
++
++						const decodedHtmlPath = decodeURI(htmlLinkPath);
++
++						if (decodedHtmlPath === "") {
++							imageText = imageText.replace(
++								htmlMatch,
++								`[${
++									htmlName || "Invalid HTML Link"
++								}](${encodeURI(htmlLinkPath)})`,
++							);
++							continue;
++						}
++
++						const linkedFile =
++							this.metadataCache.getFirstLinkpathDest(
++								decodedHtmlPath,
++								filePath,
++							) as TFile;
++
++						if (!linkedFile || linkedFile.extension !== "html") {
++							imageText = imageText.replace(
++								htmlMatch,
++								`[${htmlName || decodedHtmlPath}](${encodeURI(
++									htmlLinkPath,
++								)})`,
++							);
++							continue;
++						}
++
++						if (linkedFile.stat.size > HTML_MAX_SIZE_BYTES) {
++							new Notice(
++								`HTML file ${linkedFile.name} is larger than 20MB and will not be published as an embed. A link will be used.`,
++							);
++
++							imageText = imageText.replace(
++								htmlMatch,
++								`[${
++									htmlName || linkedFile.name
++								} (HTML file too large to embed)](${encodeURI(
++									htmlLinkPath,
++								)})`,
++							);
++							continue;
++						}
++
++						const htmlBinary =
++							await this.vault.readBinary(linkedFile);
++						const htmlBase64 = arrayBufferToBase64(htmlBinary);
++						const cmsHtmlPath = `/img/user/${linkedFile.path}`;
++
++						assets.push({
++							path: cmsHtmlPath,
++							content: htmlBase64,
++							localHash: generateBlobHashFromBase64(htmlBase64),
++						});
++
++						imageText = imageText.replace(
++							htmlMatch,
++							generateHtmlIframe(
++								cmsHtmlPath,
++								htmlName || linkedFile.basename,
++							),
++						);
++					} catch (e) {
++						Logger.warn("Error processing HTML link:", e);
++
++						const nameStart = htmlMatch.indexOf("[") + 1;
++						const nameEnd = htmlMatch.indexOf("]");
++
++						const htmlName = htmlMatch.substring(
++							nameStart,
++							nameEnd,
++						);
++
++						const pathStart = htmlMatch.lastIndexOf("(") + 1;
++						const pathEnd = htmlMatch.lastIndexOf(")");
++
++						const htmlLinkPath = htmlMatch.substring(
++							pathStart,
++							pathEnd,
++						);
++
++						imageText = imageText.replace(
++							htmlMatch,
++							`[${htmlName || "HTML"}](${encodeURI(
++								htmlLinkPath,
++							)})`,
++						);
++					}
++				}
++			}
++
+ 			return [frontmatter + imageText, assets];
+ 		};
+ 
+diff --git a/src/utils/regexes.ts b/src/utils/regexes.ts
+index a5443b8..5a6662a 100644
+--- a/src/utils/regexes.ts
++++ b/src/utils/regexes.ts
+@@ -13,3 +13,7 @@ export const TRANSCLUDED_SVG_REGEX =
+ export const PDF_REGEX = /!\[(.*?)\]\((.*?)(\.pdf)\)/g;
+ export const TRANSCLUDED_PDF_REGEX =
+ 	/!\[\[(.*?)(\.pdf)\\?\|(.*?)\]\]|!\[\[(.*?)(\.pdf)\]\]/g;
++
++export const HTML_REGEX = /!\[(.*?)\]\((.*?)(\.html)\)/g;
++export const TRANSCLUDED_HTML_REGEX =
++	/!\[\[(.*?)(\.html)\\?\|(.*?)\]\]|!\[\[(.*?)(\.html)\]\]/g;
+-- 
+2.43.0
+

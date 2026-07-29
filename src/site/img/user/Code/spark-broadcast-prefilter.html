@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Broadcast pre-filtering — prune before you pay to move</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;
+    --chip-bg:        rgba(11,11,11,0.045);
+    --kept:           #2a78d6;
+    --dropped:        #e1e0d9;
+    --hero:           #0b0b0b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --chip-bg:        rgba(255,255,255,0.07);
+      --kept:           #3987e5;
+      --dropped:        #2c2c2a;
+      --hero:           #ffffff;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --chip-bg:        rgba(255,255,255,0.07);
+    --kept:           #3987e5;
+    --dropped:        #2c2c2a;
+    --hero:           #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.45;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 22px 20px 40px; }
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { color: var(--text-secondary); margin: 0; max-width: 72ch; }
+  .sub code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .sub code { background: var(--chip-bg); padding: 1px 5px; border-radius: 4px; }
+  #themeToggle {
+    flex: none; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+    border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  #themeToggle:hover { color: var(--text-primary); }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 12.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 10px; }
+  .card h2 .ds { color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
+
+  /* step 1 — the broadcast */
+  .bflow { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
+  .bnode { text-align: center; }
+  .bnode .cap { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+  .btable {
+    border: 1px solid var(--baseline); border-radius: 8px; padding: 7px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--text-secondary);
+    text-align: left; line-height: 1.5;
+  }
+  .btable b { color: var(--text-primary); font-weight: 600; }
+  .barrow { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+  .barrow .mono { display: block; font-size: 10.5px; }
+  .zchips { display: flex; gap: 6px; }
+  .zchip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600;
+    border: 1.5px solid var(--kept); color: var(--kept);
+    border-radius: 6px; padding: 3px 8px; background: transparent;
+  }
+  .execs { display: flex; gap: 6px; }
+  .exec {
+    border: 1px dashed var(--baseline); border-radius: 7px; padding: 5px 7px;
+    font-size: 10.5px; color: var(--text-muted); text-align: center; line-height: 1.35;
+  }
+  .exec .mini { display: flex; gap: 3px; justify-content: center; margin-top: 3px; }
+  .exec .mini span { width: 10px; height: 6px; border-radius: 2px; background: var(--kept); opacity: .85; }
+
+  /* step 2 — the gate */
+  .gatehead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .counts { display: flex; gap: 22px; }
+  .count .n { font-size: 21px; font-weight: 650; color: var(--hero); font-variant-numeric: tabular-nums; }
+  .count .l { font-size: 11px; color: var(--text-muted); }
+  #runBtn {
+    border: 1px solid var(--kept); background: transparent; color: var(--kept);
+    border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #runBtn:disabled { opacity: .45; cursor: default; }
+  #zonegrid { display: grid; grid-template-columns: repeat(28, 1fr); gap: 3px; }
+  .zcell {
+    aspect-ratio: 1.4; border-radius: 3px; background: var(--dropped);
+    transition: opacity .5s, background .5s, transform .5s; cursor: default; position: relative;
+  }
+  .zcell.kept { background: var(--kept); }
+  .zcell.gone { opacity: 0.14; transform: scale(0.72); }
+  .gridcap { font-size: 12px; color: var(--text-muted); margin-top: 9px; }
+  .gridcap b { color: var(--text-secondary); font-weight: 600; }
+
+  /* step 3 — the bars */
+  .bar-row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; margin: 7px 0; }
+  .bar-label { font-size: 12.5px; color: var(--text-secondary); text-align: right; }
+  .bar-track { position: relative; height: 22px; }
+  .bar-fill {
+    position: absolute; inset: 2px auto 2px 0; border-radius: 4px; background: var(--kept);
+    min-width: 3px; transition: width 1.1s cubic-bezier(.2,.7,.2,1);
+  }
+  .bar-fill.muted { background: var(--baseline); }
+  .bar-val {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    font-size: 12px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .note { font-size: 12.5px; color: var(--text-secondary); border-left: 3px solid var(--gridline); padding: 2px 0 2px 10px; margin-top: 12px; }
+  .note b { font-weight: 650; }
+
+  #tooltip {
+    position: fixed; z-index: 30; pointer-events: none; display: none;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14); padding: 7px 10px; font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-secondary);
+  }
+  #tooltip b { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Broadcast pre-filtering — prune before you pay to move</h1>
+      <p class="sub">The partner catalog touches a handful of fare zones; <code>route_stops</code> covers the whole country.
+      Compute the zones that are actually present, <code>broadcast</code> that tiny set, and discard reference rows that
+      provably can't match — <em>before</em> the shuffle pays to move them.</p>
+    </div>
+    <button id="themeToggle" type="button">Dark mode</button>
+  </header>
+
+  <div class="card">
+    <h2>Step 1 · The broadcast: a tiny set, shipped everywhere</h2>
+    <div class="bflow">
+      <div class="bnode">
+        <div class="btable">stopsPrepared<br><b>zone_key</b> "0042" ×41<br><b>zone_key</b> "0043" ×17<br><b>zone_key</b> "0117" ×6</div>
+        <div class="cap">the partner's 64 stops</div>
+      </div>
+      <div class="barrow">→<span class="mono">.select("zone_key").distinct()</span></div>
+      <div class="bnode">
+        <div class="zchips"><span class="zchip">0042</span><span class="zchip">0043</span><span class="zchip">0117</span></div>
+        <div class="cap">presentZones · 3 rows, ~a few hundred bytes</div>
+      </div>
+      <div class="bflow" style="gap:10px 14px;">
+      <div class="barrow">→<span class="mono">broadcast(…)</span></div>
+      <div class="bnode">
+        <div class="execs">
+          <div class="exec">executor 1<div class="mini"><span></span><span></span><span></span></div></div>
+          <div class="exec">executor 2<div class="mini"><span></span><span></span><span></span></div></div>
+          <div class="exec">…</div>
+          <div class="exec">executor 200<div class="mini"><span></span><span></span><span></span></div></div>
+        </div>
+        <div class="cap">every executor holds the full set — no shuffle needed to check membership</div>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Step 2 · The gate: <span class="ds">route_stops</span>, one cell per fare zone</h2>
+    <div class="gatehead">
+      <div class="counts">
+        <div class="count"><div class="n" id="cZones">224</div><div class="l">zones in the feed</div></div>
+        <div class="count"><div class="n" id="cRows">1.83M</div><div class="l">rows in the feed</div></div>
+        <div class="count"><div class="n" id="cKept">—</div><div class="l">rows that survive</div></div>
+      </div>
+      <button id="runBtn" type="button">Run the pre-filter</button>
+    </div>
+    <div id="zonegrid"></div>
+    <p class="gridcap">Each cell is one fare zone, sized here as ~8k <span class="mono">route_stops</span> rows on average.
+    <b>Blue cells are zones in <span class="mono">presentZones</span></b> — the only rows the join could ever match.</p>
+  </div>
+
+  <div class="card">
+    <h2>Step 3 · What the shuffle actually moves</h2>
+    <div class="bar-row">
+      <div class="bar-label">without pre-filter</div>
+      <div class="bar-track"><div class="bar-fill muted" id="barAll" style="width:0%"></div><span class="bar-val" id="valAll"></span></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">with pre-filter</div>
+      <div class="bar-track"><div class="bar-fill" id="barKept" style="width:0%"></div><span class="bar-val" id="valKept"></span></div>
+    </div>
+    <p class="note"><b>Semantically this join is a no-op</b> — an inner join against the keys we're about to match on anyway
+    removes nothing the outer join wouldn't have dropped. In practice it's the difference between shuffling a national feed
+    and shuffling three zones' worth of it. Spark can do this automatically (dynamic partition pruning) only when the big side
+    is directory-partitioned on the join key; ours isn't, so the code does it by hand.</p>
+  </div>
+</div>
+
+<div id="tooltip" role="status"></div>
+
+<script>
+"use strict";
+
+/* deterministic pseudo-random so every load draws the same country */
+let seed = 42;
+function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+
+const N_ZONES = 224;
+const PRESENT = new Set([37, 38, 121]);       /* grid positions for 0042, 0043, 0117 */
+const PRESENT_IDS = { 37: "0042", 38: "0043", 121: "0117" };
+
+const zones = [];
+let totalRows = 0, keptRows = 0;
+for (let i = 0; i < N_ZONES; i++) {
+  const rows = 2000 + Math.floor(rnd() * 14000);
+  const kept = PRESENT.has(i);
+  const id = PRESENT_IDS[i] || String(1 + Math.floor(rnd() * 8999)).padStart(4, "0");
+  zones.push({ i, id, rows, kept });
+  totalRows += rows;
+  if (kept) keptRows += rows;
+}
+
+const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n);
+
+document.getElementById("cZones").textContent = String(N_ZONES);
+document.getElementById("cRows").textContent = fmt(totalRows);
+
+const grid = document.getElementById("zonegrid");
+const tooltip = document.getElementById("tooltip");
+for (const z of zones) {
+  const c = document.createElement("div");
+  c.className = "zcell" + (z.kept ? " kept" : "");
+  c.addEventListener("pointermove", e => {
+    tooltip.replaceChildren();
+    const b = document.createElement("b");
+    b.textContent = `zone ${z.id}`;
+    tooltip.appendChild(b);
+    tooltip.appendChild(document.createTextNode(` · ${fmt(z.rows)} rows · ${z.kept ? "in presentZones — kept" : "cannot match — dropped"}`));
+    tooltip.style.display = "block";
+    const pad = 12;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    if (x + tooltip.offsetWidth > window.innerWidth - 8) x = e.clientX - tooltip.offsetWidth - pad;
+    tooltip.style.left = x + "px"; tooltip.style.top = y + "px";
+  });
+  c.addEventListener("pointerleave", () => { tooltip.style.display = "none"; });
+  grid.appendChild(c);
+}
+
+const btn = document.getElementById("runBtn");
+const barAll = document.getElementById("barAll"), barKept = document.getElementById("barKept");
+const valAll = document.getElementById("valAll"), valKept = document.getElementById("valKept");
+
+function placeVal(el, fill, pct) {
+  if (pct > 18) {
+    el.style.left = "8px";
+    el.style.color = fill.classList.contains("muted") ? "var(--text-primary)" : "#fff";
+  } else {
+    el.style.left = `calc(${pct}% + 8px)`;
+    el.style.color = "var(--text-primary)";
+  }
+}
+
+let ran = false;
+function run() {
+  if (ran) { reset(); return; }
+  ran = true;
+  btn.textContent = "Reset";
+  const cells = grid.children;
+  zones.forEach((z, idx) => {
+    if (!z.kept) setTimeout(() => cells[idx].classList.add("gone"), 120 + (idx % 28) * 22 + Math.floor(idx / 28) * 14);
+  });
+  setTimeout(() => {
+    document.getElementById("cKept").textContent = fmt(keptRows) + ` (${(100 * keptRows / totalRows).toFixed(1)}%)`;
+    const keptPct = Math.max(1.2, 100 * keptRows / totalRows);
+    barAll.style.width = "100%"; valAll.textContent = fmt(totalRows) + " rows"; placeVal(valAll, barAll, 100);
+    barKept.style.width = keptPct + "%"; valKept.textContent = fmt(keptRows) + " rows"; placeVal(valKept, barKept, keptPct);
+  }, 650);
+}
+function reset() {
+  ran = false;
+  btn.textContent = "Run the pre-filter";
+  for (const c of grid.children) c.classList.remove("gone");
+  document.getElementById("cKept").textContent = "—";
+  barAll.style.width = "0%"; barKept.style.width = "0%";
+  valAll.textContent = ""; valKept.textContent = "";
+}
+btn.addEventListener("click", run);
+
+/* theme toggle */
+const toggle = document.getElementById("themeToggle");
+function currentDark() {
+  const forced = document.documentElement.dataset.theme;
+  if (forced) return forced === "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+function syncToggleLabel() { toggle.textContent = currentDark() ? "Light mode" : "Dark mode"; }
+toggle.addEventListener("click", () => {
+  document.documentElement.dataset.theme = currentDark() ? "light" : "dark";
+  syncToggleLabel();
+});
+syncToggleLabel();
+</script>
+</body>
+</html>
